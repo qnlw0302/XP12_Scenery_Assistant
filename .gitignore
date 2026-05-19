@@ -1,0 +1,26 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local editor/system files
+.DS_Store
+.idea/
+.vscode/
+
+# Build/package output
+build/
+dist/
+*.egg-info/
+
+# Local generated X-Plane files and backups
+scenery_packs.ini
+scenery_packs.ini.backup-*
+
+# Logs
+*.log
