@@ -1,10 +1,3 @@
-"""Classification rules for X-Plane 12 scenery folders.
-
-These rules are intentionally simple and beginner-friendly. They use folder
-names and a few common X-Plane folder structures to make a best-effort guess.
-You can adjust the keyword lists below as you learn more about your scenery.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -140,21 +133,36 @@ def classify_folder(folder_path: Path) -> str:
     name = folder_path.name
     name_lower = name.casefold()
 
-    if is_global_airports(name):
+    # 1. Official fixed names. These are intentionally strict.
+    if is_global_airports_folder(name):
         return GLOBAL_AIRPORTS
 
-    # Mesh stays near the bottom, so detect it before broader ortho rules.
-    if contains_keyword(name_lower, MESH_KEYWORDS):
-        return MESH
+    if is_xplane_landmarks_folder(name):
+        return LANDMARKS_CITY
 
-    # Overlay names can contain "Ortho4XP", so check overlays before ortho.
-    if contains_keyword(name_lower, OVERLAY_KEYWORDS):
-        return OVERLAYS
-
-    if looks_like_library(name):
+    # 2. Internal structure. These checks are preferred over naming guesses.
+    if has_library_txt(folder_path):
         return LIBRARIES
 
-    if looks_like_airport(folder_path, name, name_lower):
+    if has_apt_dat(folder_path):
+        return CUSTOM_AIRPORTS
+
+    # Overlay packages do not have one universal file marker, so the overlay
+    # name check is kept here before DSF-only folders fall through to mesh.
+    if "overlay" in name_lower:
+        return OVERLAYS
+
+    has_dsf = has_dsf_files(folder_path)
+    has_ortho_assets = has_folder(folder_path, "textures") or has_folder(folder_path, "terrain")
+
+    if has_dsf and has_ortho_assets:
+        return ORTHO_PHOTOREAL
+
+    if has_dsf:
+        return MESH
+
+    # 3. Keyword fallback. This is only used after structure checks fail.
+    if looks_like_airport_name(name, name_lower):
         return CUSTOM_AIRPORTS
 
     if contains_keyword(name_lower, LANDMARK_KEYWORDS):
@@ -163,35 +171,84 @@ def classify_folder(folder_path: Path) -> str:
     if contains_keyword(name_lower, REGIONAL_KEYWORDS):
         return REGIONAL_ENHANCEMENTS
 
+    if looks_like_library_name(name):
+        return LIBRARIES
+
     if contains_keyword(name_lower, ORTHO_KEYWORDS) or ORTHO_TILE_PATTERN.search(name):
         return ORTHO_PHOTOREAL
+
+    if contains_keyword(name_lower, OVERLAY_KEYWORDS):
+        return OVERLAYS
+
+    if contains_keyword(name_lower, MESH_KEYWORDS):
+        return MESH
 
     return UNKNOWN
 
 
-def is_global_airports(name: str) -> bool:
-    """Detect the default Global Airports package exactly or nearly exactly."""
+def is_global_airports_folder(name: str) -> bool:
+    """Return True only for the official Global Airports folder name."""
 
-    normalized = normalize_name(name)
-    exact_names = {
-        "globalairports",
-        "xplaneglobalairports",
-        "xplane12globalairports",
-    }
-
-    if normalized in exact_names:
-        return True
-
-    # Near-exact examples: "Global Airports XP12", "X-Plane Global Airports".
-    words = set(re.findall(r"[a-z0-9]+", name.casefold()))
-    return "global" in words and "airports" in words
+    return name == "Global Airports"
 
 
-def looks_like_airport(folder_path: Path, name: str, name_lower: str) -> bool:
-    """Detect custom airport packages."""
+def is_xplane_landmarks_folder(name: str) -> bool:
+    """Return True for official X-Plane landmark packages."""
 
-    if has_airport_data(folder_path):
-        return True
+    return name.startswith("X-Plane Landmarks")
+
+
+def has_file(folder: Path, relative_path: str | Path) -> bool:
+    """Return True if a file exists at folder/relative_path."""
+
+    return (folder / relative_path).is_file()
+
+
+def has_library_txt(folder: Path) -> bool:
+    """Return True when the package exposes X-Plane library objects."""
+
+    return has_file(folder, "library.txt")
+
+
+def has_apt_dat(folder: Path) -> bool:
+    """Return True when the package contains airport data."""
+
+    return has_file(folder, Path("Earth nav data") / "apt.dat")
+
+
+def has_dsf_files(folder: Path) -> bool:
+    """Return True if Earth nav data contains one or more .dsf scenery files."""
+
+    earth_nav_data = folder / "Earth nav data"
+
+    if not earth_nav_data.is_dir():
+        return False
+
+    try:
+        for item in earth_nav_data.rglob("*"):
+            if item.is_file() and item.suffix.casefold() == ".dsf":
+                return True
+    except OSError:
+        return False
+
+    return False
+
+
+def has_folder(folder: Path, folder_name: str) -> bool:
+    """Return True if the package has a direct child folder with this name."""
+
+    try:
+        for item in folder.iterdir():
+            if item.is_dir() and item.name.casefold() == folder_name.casefold():
+                return True
+    except OSError:
+        return False
+
+    return False
+
+
+def looks_like_airport_name(name: str, name_lower: str) -> bool:
+    """Use folder-name hints as a fallback for custom airport packages."""
 
     if contains_keyword(name_lower, AIRPORT_KEYWORDS):
         return True
@@ -203,8 +260,8 @@ def looks_like_airport(folder_path: Path, name: str, name_lower: str) -> bool:
     return False
 
 
-def looks_like_library(name: str) -> bool:
-    """Detect common library packages without treating every SAM-like word as a library."""
+def looks_like_library_name(name: str) -> bool:
+    """Detect common library names without treating every SAM-like word as a library."""
 
     name_lower = name.casefold()
     words = set(re.findall(r"[a-z0-9]+", name_lower))
@@ -230,10 +287,9 @@ def looks_like_library(name: str) -> bool:
 
 
 def has_airport_data(folder_path: Path) -> bool:
-    """Check for the standard X-Plane airport data file."""
+    """Backward-compatible alias for the newer has_apt_dat helper."""
 
-    apt_dat_path = folder_path / "Earth nav data" / "apt.dat"
-    return apt_dat_path.is_file()
+    return has_apt_dat(folder_path)
 
 
 def contains_keyword(name_lower: str, keywords: list[str]) -> bool:

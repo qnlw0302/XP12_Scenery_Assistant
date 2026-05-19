@@ -22,6 +22,7 @@ and writes a new sorted file only after the user clicks **Apply**.
   - Mesh
   - Unknown
 - Preview the generated order before writing files.
+- Manually change a folder's category in the preview table before applying.
 - Back up the existing `scenery_packs.ini` before applying changes.
 - Generate lines in this format:
 
@@ -30,7 +31,26 @@ SCENERY_PACK Custom Scenery/Folder Name/
 ```
 
 Unknown folders are never deleted. They are included at the bottom of the
-generated file.
+generated file and can be manually assigned to a category in the UI.
+
+## Classification Logic
+
+The classifier does not rely only on folder names. It checks folders in this
+order:
+
+1. Official fixed names:
+   - `Global Airports`
+   - folders starting with `X-Plane Landmarks`
+2. Internal structure:
+   - `library.txt`
+   - `Earth nav data/apt.dat`
+   - overlay folder names
+   - DSF files plus `textures` or `terrain`
+   - DSF files without airport data
+3. Keyword fallback:
+   - used only when structure checks are inconclusive
+
+If no confident match is found, the folder is classified as `Unknown`.
 
 ## Sorting Order
 
@@ -68,7 +88,8 @@ Then:
 1. Click **Select Custom Scenery Folder**.
 2. Choose your X-Plane 12 `Custom Scenery` folder.
 3. Review the preview table.
-4. Click **Apply** to back up the old file and write the new one.
+4. Select any row and use **Set Selected Category** if a category needs fixing.
+5. Click **Apply** to back up the old file and write the new one.
 
 ## Project Structure
 
